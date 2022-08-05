@@ -1,34 +1,53 @@
-import asyncio
+# import asyncio
 
 import numpy as np
 import zarr
-from zarr.storage import contains_array, contains_group, meta_root
-from zarr.core import check_fields, check_array_shape, ensure_ndarray
+from zarr.core import check_array_shape, check_fields, ensure_ndarray
 from zarr.hierarchy import (
-    _normalize_store_arg, ContainsArrayError, ContainsGroupError, DEFAULT_ZARR_VERSION,
-    GroupNotFoundError, init_group, normalize_storage_path
+    ContainsArrayError,
+    GroupNotFoundError,
+    _normalize_store_arg,
+    normalize_storage_path,
 )
+from zarr.storage import contains_array, contains_group, meta_root
 
 
 class AGroup(zarr.Group):
     def __getitem__(self, item):
         path = self._item_path(item)
         if contains_array(self._store, path):
-            return AArray(self._store, read_only=self._read_only, path=path,
-                          chunk_store=self._chunk_store,
-                          synchronizer=self._synchronizer, cache_attrs=self.attrs.cache,
-                          zarr_version=self._version)
+            return AArray(
+                self._store,
+                read_only=self._read_only,
+                path=path,
+                chunk_store=self._chunk_store,
+                synchronizer=self._synchronizer,
+                cache_attrs=self.attrs.cache,
+                zarr_version=self._version,
+            )
         elif contains_group(self._store, path, explicit_only=True):
-            return AGroup(self._store, read_only=self._read_only, path=path,
-                          chunk_store=self._chunk_store, cache_attrs=self.attrs.cache,
-                          synchronizer=self._synchronizer, zarr_version=self._version)
+            return AGroup(
+                self._store,
+                read_only=self._read_only,
+                path=path,
+                chunk_store=self._chunk_store,
+                cache_attrs=self.attrs.cache,
+                synchronizer=self._synchronizer,
+                zarr_version=self._version,
+            )
         elif self._version == 3:
-            implicit_group = meta_root + path + '/'
+            implicit_group = meta_root + path + "/"
             # non-empty folder in the metadata path implies an implicit group
             if self._store.list_prefix(implicit_group):
-                return AGroup(self._store, read_only=self._read_only, path=path,
-                              chunk_store=self._chunk_store, cache_attrs=self.attrs.cache,
-                              synchronizer=self._synchronizer, zarr_version=self._version)
+                return AGroup(
+                    self._store,
+                    read_only=self._read_only,
+                    path=path,
+                    chunk_store=self._chunk_store,
+                    cache_attrs=self.attrs.cache,
+                    synchronizer=self._synchronizer,
+                    zarr_version=self._version,
+                )
             else:
                 raise KeyError(item)
         else:
@@ -36,7 +55,6 @@ class AGroup(zarr.Group):
 
 
 class AArray(zarr.Array):
-
     async def _get_selection(self, indexer, out=None, fields=None):
 
         # We iterate over all chunks which overlap the selection and thus contain data
@@ -56,30 +74,50 @@ class AArray(zarr.Array):
         if out is None:
             out = np.empty(out_shape, dtype=out_dtype, order=self._order)
         else:
-            check_array_shape('out', out, out_shape)
+            check_array_shape("out", out, out_shape)
 
         # iterate over chunks
-        if not hasattr(self.chunk_store, "getitems") or \
-                any(map(lambda x: x == 0, self.shape)):
+        if not hasattr(self.chunk_store, "getitems") or any(
+            map(lambda x: x == 0, self.shape)
+        ):
             # sequentially get one key at a time from storage
             for chunk_coords, chunk_selection, out_selection in indexer:
 
                 # load chunk selection into output array
-                await self._chunk_getitem(chunk_coords, chunk_selection, out, out_selection,
-                                          drop_axes=indexer.drop_axes, fields=fields)
+                await self._chunk_getitem(
+                    chunk_coords,
+                    chunk_selection,
+                    out,
+                    out_selection,
+                    drop_axes=indexer.drop_axes,
+                    fields=fields,
+                )
         else:
             # allow storage to get multiple items at once
             lchunk_coords, lchunk_selection, lout_selection = zip(*indexer)
-            await self._chunk_getitems(lchunk_coords, lchunk_selection, out, lout_selection,
-                                       drop_axes=indexer.drop_axes, fields=fields)
+            await self._chunk_getitems(
+                lchunk_coords,
+                lchunk_selection,
+                out,
+                lout_selection,
+                drop_axes=indexer.drop_axes,
+                fields=fields,
+            )
 
         if out.shape:
             return out
         else:
             return out[()]
 
-    async def _chunk_getitem(self, chunk_coords, chunk_selection, out, out_selection,
-                       drop_axes=None, fields=None):
+    async def _chunk_getitem(
+        self,
+        chunk_coords,
+        chunk_selection,
+        out,
+        out_selection,
+        drop_axes=None,
+        fields=None,
+    ):
         """Obtain part or whole of a chunk.
 
         Parameters
@@ -123,11 +161,25 @@ class AArray(zarr.Array):
                 out[out_selection] = fill_value
 
         else:
-            self._process_chunk(out, cdata, chunk_selection, drop_axes,
-                                out_is_ndarray, fields, out_selection)
+            self._process_chunk(
+                out,
+                cdata,
+                chunk_selection,
+                drop_axes,
+                out_is_ndarray,
+                fields,
+                out_selection,
+            )
 
-    async def _chunk_getitems(self, lchunk_coords, lchunk_selection, out, lout_selection,
-                              drop_axes=None, fields=None):
+    async def _chunk_getitems(
+        self,
+        lchunk_coords,
+        lchunk_selection,
+        out,
+        lout_selection,
+        drop_axes=None,
+        fields=None,
+    ):
         """As _chunk_getitem, but for lists of chunks
 
         This gets called where the storage supports ``getitems``, so that
@@ -142,7 +194,9 @@ class AArray(zarr.Array):
         ckeys = [self._chunk_key(ch) for ch in lchunk_coords]
         partial_read_decode = False
         cdatas = await self.chunk_store.getitems(ckeys, on_error="omit")
-        for ckey, chunk_select, out_select in zip(ckeys, lchunk_selection, lout_selection):
+        for ckey, chunk_select, out_select in zip(
+            ckeys, lchunk_selection, lout_selection
+        ):
             if ckey in cdatas:
                 self._process_chunk(
                     out,
@@ -164,8 +218,17 @@ class AArray(zarr.Array):
                     out[out_select] = fill_value
 
 
-def open_group(store=None, mode='a', cache_attrs=True, synchronizer=None, path=None,
-               chunk_store=None, storage_options=None, *, zarr_version=None):
+def open_group(
+    store=None,
+    mode="a",
+    cache_attrs=True,
+    synchronizer=None,
+    path=None,
+    chunk_store=None,
+    storage_options=None,
+    *,
+    zarr_version=None
+):
     """Open a group using file-mode-like semantics.
 
     Parameters
@@ -213,8 +276,8 @@ def open_group(store=None, mode='a', cache_attrs=True, synchronizer=None, path=N
 
     # handle polymorphic store arg
     store = _normalize_store_arg(
-        store, storage_options=storage_options, mode=mode,
-        zarr_version=zarr_version)
+        store, storage_options=storage_options, mode=mode, zarr_version=zarr_version
+    )
     # TODO: check metadata store is *not* async
     chunk_store = FakeGetter()
 
@@ -222,7 +285,7 @@ def open_group(store=None, mode='a', cache_attrs=True, synchronizer=None, path=N
 
     # ensure store is initialized
 
-    if mode == 'r':
+    if mode == "r":
         if not contains_group(store, path=path):
             if contains_array(store, path=path):
                 raise ContainsArrayError(path)
@@ -230,11 +293,17 @@ def open_group(store=None, mode='a', cache_attrs=True, synchronizer=None, path=N
 
     else:
         raise NotImplementedError
-    read_only = mode == 'r'
+    read_only = mode == "r"
 
-    return AGroup(store, read_only=read_only, cache_attrs=cache_attrs,
-                  synchronizer=synchronizer, path=path, chunk_store=chunk_store,
-                  zarr_version=zarr_version)
+    return AGroup(
+        store,
+        read_only=read_only,
+        cache_attrs=cache_attrs,
+        synchronizer=synchronizer,
+        path=path,
+        chunk_store=chunk_store,
+        zarr_version=zarr_version,
+    )
 
 
 async def key_error_maker():

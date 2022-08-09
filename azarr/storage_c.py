@@ -41,6 +41,7 @@ class ASyncStore(BaseStore):
 async def get(session, url):
     try:
         r = await session.get(url)
-        return await r.read()
+        if r.ok:
+            return await r.read()
     except Exception:
         return None

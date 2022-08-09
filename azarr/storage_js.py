@@ -25,9 +25,16 @@ class ASyncStore(BaseStore):
 
     async def getitems(self, keys):
         urls = ["/".join([self.prefix, k]) for k in keys]
-        responses = await asyncio.gather([js.http.pyfetch(url) for url in urls])
-        out = await asyncio.gather([r.bytes() for r in responses if r.ok])
-        valid_keys = [k for k, r in zip(keys, responses) if r.ok]
-        return {k: o for k, o in zip(valid_keys, out)}
+        data = await asyncio.gather([get(url) for url in urls])
+        return {k: o for k, o in zip(keys, data) if o}
 
     __delitem__ = __getitem__ = __iter__ = __len__ = __setitem__ = None
+
+
+async def get(url):
+    try:
+        r = await js.http.pyfetch(url)
+        if r.ok:
+            return await r.bytes()
+    except Exception:
+        return None

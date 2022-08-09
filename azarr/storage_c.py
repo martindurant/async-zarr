@@ -13,12 +13,15 @@ class SyncStore(BaseStore):
     def __getitem__(self, key):
         url = "/".join([self.prefix, key])
         try:
-            return self.session.get(url).read()
+            r = self.session.get(url)
+            if r.ok:
+                out = r.content
+                return out
         except Exception:
             pass
-        return KeyError
+        raise KeyError
 
-    __delitem__ = __getitem__ = __iter__ = __len__ = __setitem__ = None
+    __delitem__ = __iter__ = __len__ = __setitem__ = None
 
 
 class ASyncStore(BaseStore):
@@ -26,11 +29,18 @@ class ASyncStore(BaseStore):
         self.prefix = prefix
         self.session = aiohttp.ClientSession()
 
-    async def getitems(self, keys):
+    async def getitems(self, keys, **_):
         urls = ["/".join([self.prefix, k]) for k in keys]
-        responses = await asyncio.gather([self.session.get(url) for url in urls])
-        out = await asyncio.gather([r.bytes() for r in responses if r.ok])
-        valid_keys = [k for k, r in zip(keys, responses) if r.ok]
-        return {k: o for k, o in zip(valid_keys, out)}
+        data = await asyncio.gather(*[get(self.session, url) for url in urls])
+        out = {k: o for k, o in zip(keys, data) if o}
+        return out
 
     __delitem__ = __getitem__ = __iter__ = __len__ = __setitem__ = None
+
+
+async def get(session, url):
+    try:
+        r = await session.get(url)
+        return await r.read()
+    except Exception:
+        return None

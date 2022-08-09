@@ -16,7 +16,7 @@ class SyncStore(BaseStore):
             pass
         raise KeyError
 
-    __delitem__ = __getitem__ = __iter__ = __len__ = __setitem__ = None
+    __delitem__ = __iter__ = __len__ = __setitem__ = None
 
 
 class ASyncStore(BaseStore):

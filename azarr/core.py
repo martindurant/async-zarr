@@ -1,15 +1,15 @@
-# import asyncio
-
 import numpy as np
 import zarr
 from zarr.core import check_array_shape, check_fields, ensure_ndarray
 from zarr.hierarchy import (
     ContainsArrayError,
     GroupNotFoundError,
-    _normalize_store_arg,
     normalize_storage_path,
 )
-from zarr.storage import contains_array, contains_group, meta_root
+from zarr.storage import contains_array, contains_group
+
+
+from .storage import SyncStore, ASyncStore
 
 
 class AGroup(zarr.Group):
@@ -35,21 +35,6 @@ class AGroup(zarr.Group):
                 synchronizer=self._synchronizer,
                 zarr_version=self._version,
             )
-        elif self._version == 3:
-            implicit_group = meta_root + path + "/"
-            # non-empty folder in the metadata path implies an implicit group
-            if self._store.list_prefix(implicit_group):
-                return AGroup(
-                    self._store,
-                    read_only=self._read_only,
-                    path=path,
-                    chunk_store=self._chunk_store,
-                    cache_attrs=self.attrs.cache,
-                    synchronizer=self._synchronizer,
-                    zarr_version=self._version,
-                )
-            else:
-                raise KeyError(item)
         else:
             raise KeyError(item)
 
@@ -76,100 +61,20 @@ class AArray(zarr.Array):
         else:
             check_array_shape("out", out, out_shape)
 
-        # iterate over chunks
-        if not hasattr(self.chunk_store, "getitems") or any(
-            map(lambda x: x == 0, self.shape)
-        ):
-            # sequentially get one key at a time from storage
-            for chunk_coords, chunk_selection, out_selection in indexer:
-
-                # load chunk selection into output array
-                await self._chunk_getitem(
-                    chunk_coords,
-                    chunk_selection,
-                    out,
-                    out_selection,
-                    drop_axes=indexer.drop_axes,
-                    fields=fields,
-                )
-        else:
-            # allow storage to get multiple items at once
-            lchunk_coords, lchunk_selection, lout_selection = zip(*indexer)
-            await self._chunk_getitems(
-                lchunk_coords,
-                lchunk_selection,
-                out,
-                lout_selection,
-                drop_axes=indexer.drop_axes,
-                fields=fields,
-            )
+        lchunk_coords, lchunk_selection, lout_selection = zip(*indexer)
+        await self._chunk_getitems(
+            lchunk_coords,
+            lchunk_selection,
+            out,
+            lout_selection,
+            drop_axes=indexer.drop_axes,
+            fields=fields,
+        )
 
         if out.shape:
             return out
         else:
             return out[()]
-
-    async def _chunk_getitem(
-        self,
-        chunk_coords,
-        chunk_selection,
-        out,
-        out_selection,
-        drop_axes=None,
-        fields=None,
-    ):
-        """Obtain part or whole of a chunk.
-
-        Parameters
-        ----------
-        chunk_coords : tuple of ints
-            Indices of the chunk.
-        chunk_selection : selection
-            Location of region within the chunk to extract.
-        out : ndarray
-            Array to store result in.
-        out_selection : selection
-            Location of region within output array to store results in.
-        drop_axes : tuple of ints
-            Axes to squeeze out of the chunk.
-        fields
-            TODO
-
-        """
-        out_is_ndarray = True
-        try:
-            out = ensure_ndarray(out)
-        except TypeError:
-            out_is_ndarray = False
-
-        assert len(chunk_coords) == len(self._cdata_shape)
-
-        # obtain key for chunk
-        ckey = self._chunk_key(chunk_coords)
-
-        try:
-            # obtain compressed data for chunk
-            cdata = await self.chunk_store[ckey]
-
-        except KeyError:
-            # chunk not initialized
-            if self._fill_value is not None:
-                if fields:
-                    fill_value = self._fill_value[fields]
-                else:
-                    fill_value = self._fill_value
-                out[out_selection] = fill_value
-
-        else:
-            self._process_chunk(
-                out,
-                cdata,
-                chunk_selection,
-                drop_axes,
-                out_is_ndarray,
-                fields,
-                out_selection,
-            )
 
     async def _chunk_getitems(
         self,
@@ -224,7 +129,6 @@ def open_group(
     cache_attrs=True,
     synchronizer=None,
     path=None,
-    chunk_store=None,
     storage_options=None,
     *,
     zarr_version=None
@@ -273,17 +177,14 @@ def open_group(
     True
 
     """
+    # simplification for this example; any fsstores would be fine for non-js platforms
+    assert isinstance(store, str) and store.startswith("http")
 
     # handle polymorphic store arg
-    store = _normalize_store_arg(
-        store, storage_options=storage_options, mode=mode, zarr_version=zarr_version
-    )
-    # TODO: check metadata store is *not* async
-    chunk_store = FakeGetter()
+    chunk_store = ASyncStore(store)
+    store = SyncStore(store)
 
     path = normalize_storage_path(path)
-
-    # ensure store is initialized
 
     if mode == "r":
         if not contains_group(store, path=path):
@@ -292,6 +193,7 @@ def open_group(
             raise GroupNotFoundError(path)
 
     else:
+        # although could have http PUT, leaving this example read-only for now
         raise NotImplementedError
     read_only = mode == "r"
 
@@ -304,21 +206,3 @@ def open_group(
         chunk_store=chunk_store,
         zarr_version=zarr_version,
     )
-
-
-async def key_error_maker():
-    raise KeyError
-
-
-class FakeGetter(dict):
-    def __init__(self, *args, **kwargs):
-        self.needed_keys = set()
-        super().__init__(*args, **kwargs)
-
-    def __getitem__(self, item):
-        self.needed_keys.add(item)
-        return key_error_maker()
-
-    def getitems(self, items):
-        self.needed_keys.update(items)
-        return {}

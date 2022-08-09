@@ -124,14 +124,12 @@ class AArray(zarr.Array):
 
 
 def open_group(
-    store=None,
-    mode="a",
+    store,
+    mode="r",
     cache_attrs=True,
     synchronizer=None,
     path=None,
-    storage_options=None,
-    *,
-    zarr_version=None
+    **_,
 ):
     """Open a group using file-mode-like semantics.
 
@@ -204,5 +202,5 @@ def open_group(
         synchronizer=synchronizer,
         path=path,
         chunk_store=chunk_store,
-        zarr_version=zarr_version,
+        zarr_version=2,
     )

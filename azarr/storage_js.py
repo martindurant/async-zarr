@@ -1,6 +1,6 @@
 import asyncio
 
-import js.http
+import pyodide.http
 
 try:
     from zarr.storage import BaseStore
@@ -15,9 +15,9 @@ class SyncStore(BaseStore):
     def __getitem__(self, key):
         url = "/".join([self.prefix, key])
         try:
-            return js.http.open_url(url).read()
-        except Exception:
-            pass
+            return pyodide.http.open_url(url).read()
+        except Exception as e:
+            print(e)
         raise KeyError
 
     __delitem__ = __iter__ = __len__ = __setitem__ = None
@@ -37,8 +37,9 @@ class ASyncStore(BaseStore):
 
 async def get(url):
     try:
-        r = await js.http.pyfetch(url)
+        r = await pyodide.http.pyfetch(url)
         if r.ok:
             return await r.bytes()
-    except Exception:
+    except Exception as e:
+        print(e)
         return None

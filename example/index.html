@@ -18,9 +18,18 @@
   - zarr
 </py-env>
 <py-script output="out">
+  import asyncio
+
+  import micropip
+  await micropip.install("http://localhost:8000/dist/azarr-0.0.1-py3-none-any.whl")
   import zarr
-  f"zarr version = {zarr.__version__}"
+  print(f"zarr version = {zarr.__version__}")
+  import azarr
+  azarr.__version__
 </py-script>
+<div>
+  <py-repl id="my-repl" auto-generate="true"> </py-repl>
+</div>
 </body>
 
 </html>

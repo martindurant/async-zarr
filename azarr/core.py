@@ -23,7 +23,6 @@ class AGroup(zarr.Group):
                 chunk_store=self._chunk_store,
                 synchronizer=self._synchronizer,
                 cache_attrs=self.attrs.cache,
-                zarr_version=self._version,
             )
         elif contains_group(self._store, path, explicit_only=True):
             return AGroup(
@@ -33,7 +32,6 @@ class AGroup(zarr.Group):
                 chunk_store=self._chunk_store,
                 cache_attrs=self.attrs.cache,
                 synchronizer=self._synchronizer,
-                zarr_version=self._version,
             )
         else:
             raise KeyError(item)
@@ -202,5 +200,4 @@ def open_group(
         synchronizer=synchronizer,
         path=path,
         chunk_store=chunk_store,
-        zarr_version=2,
     )

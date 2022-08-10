@@ -6,7 +6,7 @@ import pytest
 import requests
 import time
 
-here = os.path.dirname(__file__)
+here = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
 
 
 class CORSRequestHandler(http.server.SimpleHTTPRequestHandler):
@@ -30,7 +30,7 @@ class CORSRequestHandler(http.server.SimpleHTTPRequestHandler):
 def server():
     P = subprocess.Popen(["python", __file__])
     timeout = 5
-    url = "http://localhost:8000/test.zarr"
+    url = "http://localhost:8000/azarr/tests/test.zarr"
     while True:
         try:
             assert requests.get(url + "/.zgroup").ok

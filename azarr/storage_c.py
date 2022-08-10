@@ -41,6 +41,10 @@ class ASyncStore(BaseStore):
 
     __delitem__ = __getitem__ = __iter__ = __len__ = __setitem__ = None
 
+    def __del__(self):
+        self.session.connector._close()
+        self.session = None
+
 
 async def get(session, url):
     try:
@@ -49,3 +53,6 @@ async def get(session, url):
             return await r.read()
     except Exception:
         return None
+    finally:
+        if "r" in locals():
+            r.release()

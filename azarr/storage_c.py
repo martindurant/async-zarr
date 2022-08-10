@@ -2,7 +2,11 @@ import asyncio
 
 import aiohttp
 import requests
-from zarr.storage import BaseStore
+
+try:
+    from zarr.storage import BaseStore
+except ImportError:
+    BaseStore = object
 
 
 class SyncStore(BaseStore):

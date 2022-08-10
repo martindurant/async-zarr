@@ -1,7 +1,11 @@
 import asyncio
 
 import js.http
-from zarr.storage import BaseStore
+
+try:
+    from zarr.storage import BaseStore
+except ImportError:
+    BaseStore = object
 
 
 class SyncStore(BaseStore):

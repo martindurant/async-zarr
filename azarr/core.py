@@ -24,7 +24,7 @@ class AGroup(zarr.Group):
                 synchronizer=self._synchronizer,
                 cache_attrs=self.attrs.cache,
             )
-        elif contains_group(self._store, path, explicit_only=True):
+        elif contains_group(self._store, path):
             return AGroup(
                 self._store,
                 read_only=self._read_only,

@@ -15,7 +15,9 @@ class SyncStore(BaseStore):
     def __getitem__(self, key):
         url = "/".join([self.prefix, key])
         try:
-            return pyodide.http.open_url(url).read()
+            out = pyodide.http.open_url(url).read()
+            if out and "nosuchkey" not in out.lower() and "error" not in out.lower():
+                return out
         except Exception as e:
             print(e)
         raise KeyError
@@ -27,9 +29,9 @@ class ASyncStore(BaseStore):
     def __init__(self, prefix):
         self.prefix = prefix
 
-    async def getitems(self, keys):
+    async def getitems(self, keys, **_):
         urls = ["/".join([self.prefix, k]) for k in keys]
-        data = await asyncio.gather([get(url) for url in urls])
+        data = await asyncio.gather(*[get(url) for url in urls])
         return {k: o for k, o in zip(keys, data) if o}
 
     __delitem__ = __getitem__ = __iter__ = __len__ = __setitem__ = None

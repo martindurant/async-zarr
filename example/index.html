@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Async Zarr Playground</title>
+  <!-- Pyscript -->
+  <link rel="stylesheet" href="https://pyscript.net/alpha/pyscript.css" />
+  <script defer src="https://pyscript.net/alpha/pyscript.js"></script>
+
+
+</head>
+
+<body>
+<div id="out"></div>
+<py-env>
+  - zarr
+</py-env>
+<py-script output="out">
+  import zarr
+  f"zarr version = {zarr.__version__}"
+</py-script>
+</body>
+
+</html>

@@ -31,19 +31,26 @@ class SyncStore(BaseStore):
 class ASyncStore(BaseStore):
     def __init__(self, prefix):
         self.prefix = prefix
-        self.session = aiohttp.ClientSession()
+        self.session = None
+
+    async def get_session(self):
+        if self.session is None:
+            self.session = aiohttp.ClientSession()
+        return self.session
 
     async def getitems(self, keys, **_):
         urls = ["/".join([self.prefix, k]) for k in keys]
-        data = await asyncio.gather(*[get(self.session, url) for url in urls])
+        session = await self.get_session()
+        data = await asyncio.gather(*[get(session, url) for url in urls])
         out = {k: o for k, o in zip(keys, data) if o}
         return out
 
     __delitem__ = __getitem__ = __iter__ = __len__ = __setitem__ = None
 
     def __del__(self):
-        self.session.connector._close()
-        self.session = None
+        if self.session is not None:
+            self.session.connector._close()
+            self.session = None
 
 
 async def get(session, url):
@@ -51,7 +58,8 @@ async def get(session, url):
         r = await session.get(url)
         if r.ok:
             return await r.read()
-    except Exception:
+    except Exception as e:
+        print(e)
         return None
     finally:
         if "r" in locals():

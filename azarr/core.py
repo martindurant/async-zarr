@@ -6,6 +6,7 @@ from zarr.hierarchy import (
     GroupNotFoundError,
     normalize_storage_path,
 )
+from zarr.convenience import ConsolidatedMetadataStore, PathNotFoundError
 from zarr.storage import contains_array, contains_group
 
 
@@ -127,6 +128,7 @@ def open_group(
     cache_attrs=True,
     synchronizer=None,
     path=None,
+    chunk_store=None,
     **_,
 ):
     """Open a group using file-mode-like semantics.
@@ -173,12 +175,11 @@ def open_group(
     True
 
     """
-    # simplification for this example; any fsstores would be fine for non-js platforms
-    assert isinstance(store, str) and store.startswith("http")
-
     # handle polymorphic store arg
-    chunk_store = ASyncStore(store)
-    store = SyncStore(store)
+    if isinstance(store, str):
+        store = SyncStore(store)
+    if chunk_store is None:
+        chunk_store = ASyncStore(store.prefix)
 
     path = normalize_storage_path(path)
 
@@ -200,4 +201,107 @@ def open_group(
         synchronizer=synchronizer,
         path=path,
         chunk_store=chunk_store,
+    )
+
+
+def open(store=None, mode="r", *, path=None, chunk_store=None, **kwargs):
+    """Convenience function to open a group or array using file-mode-like semantics.
+
+    Parameters
+    ----------
+    store : Store or string, optional
+        Store or path to directory in file system or name of zip file.
+    mode : 'r', optional
+        Persistence mode: 'r' means read only (must exist); 'r+' means
+        read/write (must exist); 'a' means read/write (create if doesn't
+        exist); 'w' means create (overwrite if exists); 'w-' means create
+        (fail if exists).
+    path : str or None, optional
+        The path within the store to open.
+    **kwargs
+        Additional parameters are passed through to :func:`zarr.creation.open_array` or
+        :func:`zarr.hierarchy.open_group`.
+
+    Returns
+    -------
+    z : :class:`zarr.core.Array` or :class:`zarr.hierarchy.Group`
+        Array or group, depending on what exists in the given store.
+
+    See Also
+    --------
+    zarr.creation.open_array, zarr.hierarchy.open_group
+
+    """
+
+    if isinstance(store, str):
+        store = SyncStore(store)
+    if chunk_store is None:
+        chunk_store = ASyncStore(store.prefix)
+
+    path = normalize_storage_path(path)
+    kwargs["path"] = path
+
+    if contains_array(store, path):
+        return AArray(store, read_only=True, chunk_store=chunk_store, **kwargs)
+    elif contains_group(store, path):
+        return open_group(store, mode=mode, chunk_store=chunk_store, **kwargs)
+    else:
+        raise PathNotFoundError(path)
+
+
+def open_consolidated(store, metadata_key=".zmetadata", mode="r", **kwargs):
+    """Open group using metadata previously consolidated into a single key.
+
+    This is an optimised method for opening a Zarr group, where instead of
+    traversing the group/array hierarchy by accessing the metadata keys at
+    each level, a single key contains all of the metadata for everything.
+    For remote data sources where the overhead of accessing a key is large
+    compared to the time to read data.
+
+    The group accessed must have already had its metadata consolidated into a
+    single key using the function :func:`consolidate_metadata`.
+
+    This optimised method only works in modes which do not change the
+    metadata, although the data may still be written/updated.
+
+    Parameters
+    ----------
+    store : MutableMapping or string
+        Store or path to directory in file system or name of zip file.
+    metadata_key : str
+        Key to read the consolidated metadata from. The default (.zmetadata)
+        corresponds to the default used by :func:`consolidate_metadata`.
+    mode : {'r', 'r+'}, optional
+        Persistence mode: 'r' means read only (must exist); 'r+' means
+        read/write (must exist) although only writes to data are allowed,
+        changes to metadata including creation of new arrays or group
+        are not allowed.
+    **kwargs
+        Additional parameters are passed through to :func:`zarr.creation.open_array` or
+        :func:`zarr.hierarchy.open_group`.
+
+    Returns
+    -------
+    g : :class:`zarr.hierarchy.Group`
+        Group instance, opened with the consolidated metadata.
+
+    See Also
+    --------
+    consolidate_metadata
+
+    """
+
+    # normalize parameters
+    if isinstance(store, str):
+        store = SyncStore(store)
+    chunk_store = kwargs.pop("chunk_store", None)
+    if chunk_store is None:
+        chunk_store = ASyncStore(store.prefix)
+
+    path = kwargs.pop("path", None)
+
+    # setup metadata store
+    meta_store = ConsolidatedMetadataStore(store, metadata_key=metadata_key)
+    return open(
+        store=meta_store, chunk_store=chunk_store, mode=mode, path=path, **kwargs
     )

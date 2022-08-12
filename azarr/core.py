@@ -6,8 +6,8 @@ from zarr.hierarchy import (
     GroupNotFoundError,
     normalize_storage_path,
 )
-from zarr.convenience import ConsolidatedMetadataStore, PathNotFoundError
-from zarr.storage import contains_array, contains_group
+from zarr.convenience import PathNotFoundError
+from zarr.storage import ConsolidatedMetadataStore, contains_array, contains_group
 
 
 from .storage import SyncStore, ASyncStore

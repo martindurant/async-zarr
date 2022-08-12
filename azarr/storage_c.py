@@ -1,4 +1,5 @@
 import asyncio
+import weakref
 
 import aiohttp
 import requests
@@ -36,6 +37,7 @@ class ASyncStore(BaseStore):
     async def get_session(self):
         if self.session is None:
             self.session = aiohttp.ClientSession()
+            weakref.finalize(self, self.close, self.session)
         return self.session
 
     async def getitems(self, keys, **_):
@@ -47,10 +49,12 @@ class ASyncStore(BaseStore):
 
     __delitem__ = __getitem__ = __iter__ = __len__ = __setitem__ = None
 
-    def __del__(self):
-        if self.session is not None:
-            self.session.connector._close()
-            self.session = None
+    @staticmethod
+    def close(session):
+        connector = getattr(session, "_connector", None)
+        if connector is not None:
+            # close after loop is dead
+            connector._close()
 
 
 async def get(session, url):
@@ -63,4 +67,4 @@ async def get(session, url):
         return None
     finally:
         if "r" in locals():
-            r.release()
+            await r.__aexit__(None, None, None)

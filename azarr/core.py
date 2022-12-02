@@ -1,6 +1,6 @@
 import numpy as np
 import zarr
-from zarr.core import check_array_shape, check_fields, ensure_ndarray
+from zarr.core import check_array_shape, check_fields, ensure_ndarray_like
 from zarr.hierarchy import (
     ContainsArrayError,
     GroupNotFoundError,
@@ -91,7 +91,7 @@ class AArray(zarr.Array):
         """
         out_is_ndarray = True
         try:
-            out = ensure_ndarray(out)
+            out = ensure_ndarray_like(out)
         except TypeError:  # pragma: no cover
             out_is_ndarray = False
 
